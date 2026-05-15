@@ -58,7 +58,6 @@ client.once("ready", async () => {
   const channel = await client.channels.fetch(PANEL_CHANNEL).catch(() => null);
   if (!channel) return console.log("Panel channel not found.");
 
-  // Prevent duplicate panels
   const messages = await channel.messages.fetch({ limit: 20 }).catch(() => null);
   if (messages) {
     const alreadySent = messages.find(m => m.author.id === client.user.id);
@@ -211,7 +210,6 @@ async function sendTranscript(channel, closedBy) {
     });
   }
 
-  // DM transcript to user
   try {
     const opener = await channel.members.fetch().then((members) =>
       members.find((m) => !m.user.bot)
@@ -368,7 +366,22 @@ client.on("interactionCreate", async (interaction) => {
       .setLabel("Close Ticket")
       .setStyle(ButtonStyle.Danger);
 
-    const row = new ActionRowBuilder().addComponents(claimButton, closeButton);
+    const escalateButton = new ButtonBuilder()
+      .setCustomId("escalate-ticket")
+      .setLabel("Escalate")
+      .setStyle(ButtonStyle.Secondary);
+
+    const deescalateButton = new ButtonBuilder()
+      .setCustomId("deescalate-ticket")
+      .setLabel("De-escalate")
+      .setStyle(ButtonStyle.Secondary);
+
+    const row = new ActionRowBuilder().addComponents(
+      claimButton,
+      closeButton,
+      escalateButton,
+      deescalateButton
+    );
 
     await ticketChannel.send({
       content: pingText,
@@ -389,12 +402,11 @@ client.on("interactionCreate", async (interaction) => {
     });
   }
 
-  // CLAIM HANDLER
+  // CLAIM / UNCLAIM (FIXED)
   if (interaction.isButton() && interaction.customId === "claim-ticket") {
     const channel = interaction.channel;
     const message = interaction.message;
 
-    // Anti-spam
     if (channel.cooldown) return;
     channel.cooldown = true;
     setTimeout(() => (channel.cooldown = false), 2000);
@@ -404,14 +416,12 @@ client.on("interactionCreate", async (interaction) => {
     const claimButton = ButtonBuilder.from(row.components[0]);
     const closeButton = ButtonBuilder.from(row.components[1]);
 
-    const isClaimed = claimButton.label === "Unclaim";
+    const isClaimed = channel.name.includes("claimed-by-");
 
     if (!isClaimed) {
       claimButton.setLabel("Unclaim").setStyle(ButtonStyle.Secondary);
 
-      await channel.setName(
-        `${channel.name}-claimed-by-${interaction.member.id}`
-      );
+      await channel.setName(`${channel.name}-claimed-by-${interaction.member.id}`);
 
       await channel.send(
         `🔒 Ticket has been **claimed** by <@${interaction.member.id}>`
@@ -430,6 +440,86 @@ client.on("interactionCreate", async (interaction) => {
     row.setComponents(claimButton, closeButton);
 
     return interaction.update({ components: [row] });
+  }
+
+  // ESCALATE BUTTON → SHOW ROLE SELECT
+  if (interaction.isButton() && interaction.customId === "escalate-ticket") {
+    const member = interaction.member;
+
+    if (
+      !member.roles.cache.has(ROLES.MODERATION_TEAM) &&
+      !member.roles.cache.has(ROLES.SENIOR_MODERATOR) &&
+      !member.roles.cache.has(ROLES.ADMINISTRATION_TEAM) &&
+      !member.roles.cache.has(ROLES.SENIOR_ADMINISTRATOR) &&
+      !member.permissions.has(PermissionsBitField.Flags.Administrator)
+    ) {
+      return interaction.reply({
+        content: "You must be **Moderation+** to escalate a ticket.",
+        ephemeral: true,
+      });
+    }
+
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId("escalate-select")
+      .setPlaceholder("Select who to ping")
+      .addOptions(
+        { label: "High Rank", value: ROLES.HIGH_RANK },
+        { label: "Foundership", value: ROLES.FOUNDERSHIP_TEAM },
+        { label: "Management", value: ROLES.MANAGEMENT_TEAM },
+        { label: "Admin Team", value: ROLES.ADMINISTRATION_TEAM },
+        { label: "Moderation Team", value: ROLES.MODERATION_TEAM },
+        { label: "Staff Team", value: ROLES.STAFF_TEAM }
+      );
+
+    const row = new ActionRowBuilder().addComponents(menu);
+
+    return interaction.reply({
+      content: "Choose who you want to ping:",
+      components: [row],
+      ephemeral: true,
+    });
+  }
+
+  // ESCALATE SELECT MENU
+  if (interaction.isStringSelectMenu() && interaction.customId === "escalate-select") {
+    const roleId = interaction.values[0];
+    const member = interaction.member;
+
+    await interaction.channel.send(
+      `⚠️ Ticket escalated by <@${member.id}>.\nPinging <@&${roleId}>`
+    );
+
+    return interaction.update({
+      content: "Escalation sent.",
+      components: []
+    });
+  }
+
+  // DE-ESCALATE
+  if (interaction.isButton() && interaction.customId === "deescalate-ticket") {
+    const member = interaction.member;
+
+    if (
+      !member.roles.cache.has(ROLES.MODERATION_TEAM) &&
+      !member.roles.cache.has(ROLES.SENIOR_MODERATOR) &&
+      !member.roles.cache.has(ROLES.ADMINISTRATION_TEAM) &&
+      !member.roles.cache.has(ROLES.SENIOR_ADMINISTRATOR) &&
+      !member.permissions.has(PermissionsBitField.Flags.Administrator)
+    ) {
+      return interaction.reply({
+        content: "You must be **Moderation+** to de-escalate a ticket.",
+        ephemeral: true,
+      });
+    }
+
+    await interaction.channel.send(
+      `✅ This ticket has been **de‑escalated** by <@${member.id}>.`
+    );
+
+    return interaction.reply({
+      content: "Ticket de‑escalated.",
+      ephemeral: true,
+    });
   }
 
   // CLOSE TICKET
@@ -454,10 +544,4 @@ client.on("interactionCreate", async (interaction) => {
 
     await sendTranscript(channel, closer);
 
-    setTimeout(() => {
-      channel.delete().catch(() => {});
-    }, 5000);
-  }
-});
-
-client.login(process.env.TOKEN);
+    setTimeout(()
