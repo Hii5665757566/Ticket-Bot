@@ -1,4 +1,3 @@
-// index.js
 require("dotenv").config();
 const {
   Client,
@@ -100,6 +99,16 @@ client.once("ready", async () => {
   console.log("Support panel sent.");
 });
 
+// WELCOME SYSTEM
+client.on("guildMemberAdd", async (member) => {
+  const channel = member.guild.channels.cache.get("1487127240515911798");
+  if (!channel) return;
+
+  channel.send({
+    content: `👋 Welcome <@${member.id}> to **Florida State Roleplay**!\n\nWe're looking for department members! <#1487127240515911791>!`,
+  });
+});
+
 // LOGGING
 async function sendTicketLog(guild, data) {
   const logChannel = await guild.channels.fetch(LOG_CHANNEL).catch(() => null);
@@ -194,12 +203,14 @@ async function sendTranscript(channel, closedBy) {
 
   // DM transcript to user
   try {
-    const opener = await channel.members.fetch().then(members =>
-      members.find(m => !m.user.bot)
+    const opener = await channel.members.fetch().then((members) =>
+      members.find((m) => !m.user.bot)
     );
 
     if (opener) {
-      await opener.send(`📄 Your ticket **${channel.name}** has been closed. Here is your transcript:`);
+      await opener.send(
+        `📄 Your ticket **${channel.name}** has been closed. Here is your transcript:`
+      );
 
       for (const chunk of chunks) {
         await opener.send({
@@ -221,7 +232,10 @@ client.on("interactionCreate", async (interaction) => {
   if (!interaction.inGuild()) return;
 
   // TICKET CREATION
-  if (interaction.isStringSelectMenu() && interaction.customId === "ticket-select") {
+  if (
+    interaction.isStringSelectMenu() &&
+    interaction.customId === "ticket-select"
+  ) {
     const value = interaction.values[0];
     const member = interaction.member;
     const guild = interaction.guild;
@@ -251,7 +265,6 @@ client.on("interactionCreate", async (interaction) => {
       description =
         "Thank you for opening a **General Support** ticket.\n" +
         "Our **Moderation / Administration / Staff Team** will assist you shortly.";
-
     } else if (value === "high_rank_support") {
       ticketTypeName = "high-rank";
       ticketTypeLabel = "High Rank Support";
@@ -265,7 +278,6 @@ client.on("interactionCreate", async (interaction) => {
         "You have opened a **High Rank Support** ticket.\n" +
         "This is used for **appeals, staff reports, and Internal Affairs matters**.\n" +
         "This ticket is visible to **High Rank personnel only**.";
-
     } else if (value === "foundership_support") {
       ticketTypeName = "foundership";
       ticketTypeLabel = "Foundership Support";
@@ -346,7 +358,10 @@ client.on("interactionCreate", async (interaction) => {
       .setLabel("Close Ticket")
       .setStyle(ButtonStyle.Danger);
 
-    const row = new ActionRowBuilder().addComponents(claimButton, closeButton);
+    const row = new ActionRowBuilder().addComponents(
+      claimButton,
+      closeButton
+    );
 
     await ticketChannel.send({
       content: pingText,
@@ -367,7 +382,7 @@ client.on("interactionCreate", async (interaction) => {
     });
   }
 
-  // CLAIM HANDLER (FULLY FIXED)
+  // CLAIM HANDLER
   if (interaction.isButton() && interaction.customId === "claim-ticket") {
     const channel = interaction.channel;
     const message = interaction.message;
@@ -387,7 +402,9 @@ client.on("interactionCreate", async (interaction) => {
     if (!isClaimed) {
       claimButton.setLabel("Unclaim").setStyle(ButtonStyle.Secondary);
 
-      await channel.setName(`${channel.name}-claimed-by-${interaction.member.id}`);
+      await channel.setName(
+        `${channel.name}-claimed-by-${interaction.member.id}`
+      );
 
       await channel.send(
         `🔒 Ticket has been **claimed** by <@${interaction.member.id}>`
