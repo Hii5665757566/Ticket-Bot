@@ -51,19 +51,31 @@ const LOG_CHANNEL = "1491261558880211004";
 const COLOR_MAIN = 0x2b2d31;
 const COLOR_LOG = 0x3498db;
 
+// READY + PANEL (no emojis, no duplicates)
 client.once("ready", async () => {
   console.log(`Logged in as ${client.user.tag}`);
+
   const channel = await client.channels.fetch(PANEL_CHANNEL).catch(() => null);
   if (!channel) return console.log("Panel channel not found.");
+
+  // Prevent duplicate panels
+  const messages = await channel.messages.fetch({ limit: 20 }).catch(() => null);
+  if (messages) {
+    const alreadySent = messages.find(m => m.author.id === client.user.id);
+    if (alreadySent) {
+      console.log("Panel already exists — not sending again.");
+      return;
+    }
+  }
 
   const embed = new EmbedBuilder()
     .setTitle("🌴 Florida State Roleplay | Support Center")
     .setDescription(
       "**Welcome to the Official Florida State Roleplay Support Desk.**\n\n" +
         "Please select a ticket type below and our team will assist you shortly.\n\n" +
-        "📩 **General Support** — Basic questions, help, issues\n" +
-        "📑 **High Rank Support** — Appeals, staff reports, IA matters\n" +
-        "👑 **Foundership Support** — Foundership Only\n\n" +
+        "**General Support** — Basic questions, help, issues\n" +
+        "**High Rank Support** — Appeals, staff reports, IA matters\n" +
+        "**Foundership Support** — Foundership Only\n\n" +
         "Choose a category from the menu below to begin."
     )
     .setColor(COLOR_MAIN)
@@ -78,25 +90,23 @@ client.once("ready", async () => {
         label: "General Support",
         value: "general_support",
         description: "For regular support, questions, and general issues.",
-        emoji: "📩",
       },
       {
         label: "High Rank Support",
         value: "high_rank_support",
         description: "Appeals, staff reports, and HR-level issues.",
-        emoji: "📑",
       },
       {
         label: "Foundership Support",
         value: "foundership_support",
-        description: "Foundership Only",
-        emoji: "👑",
+        description: "Foundership Only.",
       }
     );
 
   const row = new ActionRowBuilder().addComponents(menu);
   await channel.send({ embeds: [embed], components: [row] });
-  console.log("Support panel sent.");
+
+  console.log("Support panel sent (no emojis, no duplicates).");
 });
 
 // WELCOME SYSTEM
@@ -358,10 +368,7 @@ client.on("interactionCreate", async (interaction) => {
       .setLabel("Close Ticket")
       .setStyle(ButtonStyle.Danger);
 
-    const row = new ActionRowBuilder().addComponents(
-      claimButton,
-      closeButton
-    );
+    const row = new ActionRowBuilder().addComponents(claimButton, closeButton);
 
     await ticketChannel.send({
       content: pingText,
@@ -454,4 +461,3 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 client.login(process.env.TOKEN);
-
